@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>MAIN · MAINBOARD · 2π DJIN</title>
+<style>
+:root{
+  --bg:#05080c; --pcb:#081410; --pcb2:#0b1a14; --pcb3:#0e2019;
+  --gold:#f0d080; --green:#39ff88; --red:#ff6a5a; --cyan:#4ad0ff; --violet:#b388ff;
+  --fg:#d8dde0; --muted:#6a7a72; --border:#1a3a2a; --border-hot:#2a5a3a;
+}
+*{box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace}
+html,body{margin:0;background:var(--bg);color:var(--fg);min-height:100vh;font-size:13px;overflow-x:hidden}
+body{display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+
+header{padding:10px 16px;background:rgba(5,8,12,.96);border-bottom:1px solid var(--border);
+  display:flex;flex-wrap:wrap;gap:10px;align-items:center;position:sticky;top:0;z-index:30;backdrop-filter:blur(10px)}
+header h1{margin:0;font-size:13px;letter-spacing:.22em;color:var(--gold);font-weight:700}
+header .sub{font-size:9px;opacity:.5;letter-spacing:.16em;margin-top:2px}
+.badge{font-size:9.5px;padding:3px 9px;border:1px solid var(--border);border-radius:99px;color:var(--muted);letter-spacing:.1em;white-space:nowrap}
+.badge.on{color:var(--green);border-color:var(--green);background:rgba(57,255,136,.06)}
+.status{margin-left:auto;display:flex;gap:6px;align-items:center;font-size:10px;color:var(--muted);letter-spacing:.08em;flex-wrap:wrap}
+.status b{color:var(--gold);font-weight:700;font-size:11px}
+.btn{font:inherit;font-size:10px;padding:4px 10px;border:1px solid var(--border);background:transparent;
+  color:var(--muted);cursor:pointer;border-radius:3px;letter-spacing:.1em}
+.btn:hover{border-color:var(--gold);color:var(--gold)}
+.btn.on{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
+
+main{flex:1;display:grid;grid-template-columns:1fr 340px;min-height:0}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+
+.board-wrap{position:relative;background:var(--pcb);overflow:hidden;min-height:680px;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(57,255,136,.04), transparent 60%),
+    radial-gradient(circle at 80% 80%, rgba(240,208,128,.03), transparent 60%),
+    repeating-linear-gradient(90deg, transparent 0 39px, rgba(57,255,136,.025) 39px 40px),
+    repeating-linear-gradient(0deg, transparent 0 39px, rgba(57,255,136,.025) 39px 40px);}
+.board-wrap canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
+.board{position:relative;z-index:2;padding:28px 24px;display:grid;
+  grid-template-areas:
+    ". cpu cpu ."
+    "ram center center pcie"
+    "ram djin gpu pcie"
+    "bios djin gpu clock";
+  grid-template-columns:170px 1fr 1fr 190px;
+  grid-template-rows:auto auto auto auto;
+  gap:14px;min-height:620px}
+@media(max-width:1000px){
+  .board{padding:16px;grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto auto auto auto;
+    grid-template-areas:
+    "cpu cpu"
+    "ram pcie"
+    "center center"
+    "djin gpu"
+    "bios clock"}
+}
+
+.slot{position:relative;border:1px solid var(--border);background:linear-gradient(180deg,var(--pcb2),var(--pcb));
+  border-radius:5px;padding:9px 10px;cursor:pointer;transition:.18s;user-select:none;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.02), 0 1px 0 rgba(0,0,0,.4)}
+.slot:hover{border-color:var(--border-hot);background:linear-gradient(180deg,var(--pcb3),var(--pcb2))}
+.slot.active{border-color:var(--green);background:rgba(57,255,136,.06);box-shadow:0 0 18px rgba(57,255,136,.3),inset 0 0 0 1px rgba(57,255,136,.2)}
+.slot .lbl{font-size:8px;letter-spacing:.2em;color:var(--muted);margin-bottom:4px;font-weight:600}
+.slot .name{font-size:11px;font-weight:700;color:var(--fg);letter-spacing:.06em}
+.slot .tag{font-size:8px;color:var(--muted);margin-top:3px;letter-spacing:.04em}
+.slot .led{position:absolute;top:6px;right:6px;width:5px;height:5px;border-radius:50%;background:#2a2a2a;
+  transition:.15s;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+.slot.active .led{background:var(--green);box-shadow:0 0 8px var(--green),0 0 0 1px rgba(0,0,0,.5)}
+
+.cpu{grid-area:cpu;display:flex;flex-direction:column;align-items:center;padding:14px 12px;border-width:2px;border-color:var(--gold);background:linear-gradient(180deg,#0d1a14,#081410)}
+.cpu .ring{width:82px;height:82px;border-radius:50%;border:2px solid var(--gold);display:grid;place-items:center;
+  position:relative;margin:8px 0;background:radial-gradient(circle,rgba(240,208,128,.1),transparent 70%)}
+.cpu .ring::before{content:'';position:absolute;inset:-14px;border:1px dashed rgba(240,208,128,.3);border-radius:50%;
+  animation:spin 20s linear infinite}
+.cpu .ring::after{content:'';position:absolute;inset:-22px;border:1px dotted rgba(240,208,128,.15);border-radius:50%;
+  animation:spin 40s linear infinite reverse}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cpu .ring span{font-size:32px;color:var(--gold);text-shadow:0 0 22px var(--gold)}
+.cpu .name{color:var(--gold);font-size:12px;letter-spacing:.24em;font-weight:700}
+.cpu .clock{margin-top:6px;font-size:10px;color:var(--green);letter-spacing:.1em;font-variant-numeric:tabular-nums}
+.cpu .formula{font-size:9px;opacity:.5;margin-top:2px;font-variant-numeric:tabular-nums}
+
+.ram{grid-area:ram;border-color:var(--cyan)}
+.ram .lbl{color:var(--cyan)}
+.pcie{grid-area:pcie;border-color:var(--violet)}
+.pcie .lbl{color:var(--violet)}
+.djin{grid-area:djin;border-width:2px;border-color:var(--gold);background:linear-gradient(180deg,#1a1410,#0d0e08)}
+.djin .name{color:var(--gold)}
+.gpu{grid-area:gpu;border-color:var(--violet);background:linear-gradient(180deg,#140e1a,#08080a)}
+.gpu .name{color:var(--violet)}
+.bios{grid-area:bios;border-color:var(--red)}
+.bios .name{color:var(--red)}
+.clock-slot{grid-area:clock;border-color:var(--green)}
+.clock-slot .name{color:var(--green)}
+
+.center{grid-area:center;display:flex;flex-direction:column;justify-content:center;align-items:center;
+  gap:4px;padding:12px;border:1px dashed var(--border);border-radius:5px;background:rgba(57,255,136,.02)}
+.center .l{font-size:8px;color:var(--muted);letter-spacing:.22em;text-align:center}
+.center .arrow{font-size:16px;color:var(--green);margin:2px 0}
+.center .math{font-size:10px;color:var(--gold);letter-spacing:.15em;margin-top:4px;font-weight:700}
+
+.slot-stack{display:flex;flex-direction:column;gap:4px;margin-top:2px}
+.mini{display:flex;align-items:center;gap:6px;padding:4px 7px;border:1px solid var(--border);border-radius:3px;
+  background:#0a1611;cursor:pointer;transition:.14s;font-size:10px;position:relative}
+.mini:hover{border-color:var(--border-hot);background:#0d1e18}
+.mini.on{border-color:var(--green);background:rgba(57,255,136,.1);box-shadow:0 0 10px rgba(57,255,136,.2)}
+.mini .id{font-weight:700;color:var(--gold);font-size:10px;min-width:30px;font-variant-numeric:tabular-nums}
+.mini .nm{flex:1;color:var(--fg);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini .frm{font-size:8px;color:var(--muted);letter-spacing:.06em}
+.mini .led{width:4px;height:4px;border-radius:50%;background:#2a2a2a;flex-shrink:0}
+.mini.on .led,.mini.pulse .led{background:var(--green);box-shadow:0 0 6px var(--green)}
+
+aside{background:#060a08;border-left:1px solid var(--border);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+@media(max-width:900px){aside{border-left:0;border-top:1px solid var(--border)}}
+.panel{border-bottom:1px solid var(--border);padding:10px 12px;flex-shrink:0}
+.panel h3{margin:0 0 8px;font-size:9px;letter-spacing:.22em;color:var(--gold);font-weight:700}
+.panel .kv{display:flex;justify-content:space-between;font-size:10.5px;padding:3px 0;border-bottom:1px dashed rgba(255,255,255,.05);font-variant-numeric:tabular-nums}
+.panel .kv:last-child{border:0}
+.panel .kv span:first-child{color:var(--muted)}
+.panel .kv span:last-child{color:var(--fg)}
+.panel .big{font-size:22px;color:var(--green);font-weight:700;letter-spacing:.1em;margin-top:6px;font-variant-numeric:tabular-nums;text-shadow:0 0 12px rgba(57,255,136,.4)}
+
+.inspector{padding:10px 12px;background:#0a1410;border-bottom:1px solid var(--border);min-height:110px;font-size:10.5px}
+.inspector h4{margin:0 0 6px;font-size:10px;color:var(--gold);letter-spacing:.16em;font-weight:700}
+.inspector .row{display:flex;justify-content:space-between;padding:2px 0;font-variant-numeric:tabular-nums}
+.inspector .row span:first-child{color:var(--muted)}
+.inspector .row span:last-child{color:var(--fg)}
+.inspector .empty{color:var(--muted);font-size:10px;line-height:1.6}
+
+.log{flex:1;overflow:auto;padding:6px 12px;font-size:9px;line-height:1.55;min-height:0}
+.log .line{padding:2px 0;border-bottom:1px dashed rgba(255,255,255,.04);font-variant-numeric:tabular-nums}
+.log .t{color:var(--muted);margin-right:6px;font-size:8.5px}
+.log .line.rein{color:var(--green)}
+.log .line.raus{color:var(--red)}
+.log .line.boot{color:var(--gold)}
+.log .line.fetch{color:var(--cyan)}
+
+footer{border-top:1px solid var(--border);padding:8px 16px;font-size:9.5px;color:var(--muted);
+  display:flex;flex-wrap:wrap;gap:14px;letter-spacing:.08em;background:rgba(5,8,12,.96)}
+footer b{color:var(--gold);font-weight:700}
+
+/* pin decorative marks on slots */
+.slot::before,.slot::after{content:'';position:absolute;width:14px;height:2px;background:var(--gold);opacity:.35}
+.slot::before{top:5px;left:5px}
+.slot::after{bottom:5px;right:5px}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>MAIN · MAINBOARD</h1>
+    <div class="sub">REV 2.0 · 2π DJIN CLOCK · RAM ⇄ PCIe</div>
+  </div>
+  <span class="badge on" id="b-clock">⏱ 2πt = 0.000</span>
+  <span class="badge" id="b-freq">FREQ: 1.00 Hz</span>
+  <div class="status">
+    <span>FETCH <b id="s-fetch">0</b></span>
+    <span>REIN <b id="s-rein" style="color:var(--green)">0</b></span>
+    <span>RAUS <b id="s-raus" style="color:var(--red)">0</b></span>
+    <button class="btn on" id="btn-run">RUN</button>
+    <button class="btn" id="btn-reset">RESET</button>
+  </div>
+</header>
+
+<main>
+  <section class="board-wrap" id="board-wrap">
+    <canvas id="traces"></canvas>
+    <div class="board" id="board">
+
+      <!-- CPU · ⊙ EVIG -->
+      <div class="slot cpu" data-slot="cpu">
+        <div class="lbl">CPU · SOCKET · ⊙</div>
+        <div class="ring"><span>⊙</span></div>
+        <div class="name">EVIG</div>
+        <div class="clock" id="cpu-clock">2πt = 0.000</div>
+        <div class="formula" id="cpu-sin">sin(2πt) = 0.000</div>
+      </div>
+
+      <!-- RAM · 1-9 -->
+      <div class="slot ram">
+        <div class="lbl">RAM · BANK A · 1-9</div>
+        <div class="slot-stack" id="ram-list"></div>
+      </div>
+
+      <!-- CENTER · bus label -->
+      <div class="center">
+        <div class="l">BUS · TRACE · 40°</div>
+        <div class="arrow">◄ ───── ►</div>
+        <div class="l">RAM → DJIN → PCIe</div>
+        <div class="math">2π = 6.283185</div>
+      </div>
+
+      <!-- PCIe · 111-999 -->
+      <div class="slot pcie">
+        <div class="lbl">PCIe · BANK B · 111-999</div>
+        <div class="slot-stack" id="pcie-list"></div>
+      </div>
+
+      <!-- DJIN chipset -->
+      <div class="slot djin" data-slot="djin">
+        <span class="led"></span>
+        <div class="lbl">CHIPSET · BUS</div>
+        <div class="name">DJIN</div>
+        <div class="tag">2π rein raus</div>
+      </div>
+
+      <!-- GPU · DRACHE -->
+      <div class="slot gpu" data-slot="gpu">
+        <span class="led"></span>
+        <div class="lbl">GPU · RENDER</div>
+        <div class="name">DRACHE</div>
+        <div class="tag">KAISER ⇄ DRACHE</div>
+      </div>
+
+      <!-- BIOS · 111 -->
+      <div class="slot bios" data-slot="bios">
+        <span class="led"></span>
+        <div class="lbl">ROM · BIOS</div>
+        <div class="name">111 · BIOS</div>
+        <div class="tag">POST · UEFI</div>
+      </div>
+
+      <!-- CLOCK · 2π -->
+      <div class="slot clock-slot" data-slot="clock">
+        <span class="led"></span>
+        <div class="lbl">CLOCK</div>
+        <div class="name">2π</div>
+        <div class="tag" id="clock-tag">1.00 Hz</div>
+      </div>
+
+    </div>
+  </section>
+
+  <aside>
+    <div class="panel">
+      <h3>2π · DJIN</h3>
+      <div class="kv"><span>2π =</span><span id="p-pi">6.283185</span></div>
+      <div class="kv"><span>t =</span><span id="p-t">0.000</span></div>
+      <div class="kv"><span>sin(2πt) =</span><span id="p-sin">0.000</span></div>
+      <div class="kv"><span>Richtung</span><span id="p-dir">—</span></div>
+      <div class="big" id="p-num">0.0000</div>
+    </div>
+
+    <div class="inspector" id="inspector">
+      <div class="empty">Klick einen Slot · RAM · PCIe · CPU · DJIN · GPU · BIOS · CLOCK</div>
+    </div>
+
+    <div class="log" id="log"></div>
+  </aside>
+</main>
+
+<footer>
+  <span><b>⊙ EVIG</b> · CPU</span>
+  <span><b>DJIN</b> · 2π chipset</span>
+  <span><b>RAM 1-9</b> · outer</span>
+  <span><b>PCIe 111-999</b> · inner</span>
+  <span><b>2π</b> = 6.283185307179586</span>
+  <span style="margin-left:auto">RIDVAN · HH · IKI1UC</span>
+</footer>
+
+<script>
+const OUTER = [
+  {id:1, name:'feld', tag:'FELD'},
+  {id:2, name:'ozon', tag:'OZON'},
+  {id:3, name:'oiµix', tag:'OIµIX'},
+  {id:4, name:'real-atom', tag:'REAL'},
+  {id:5, name:'lauf', tag:'LAUF'},
+  {id:6, name:'iki2siz', tag:'IKI2'},
+  {id:7, name:'ctrl.us', tag:'CTRL7'},
+  {id:8, name:'ctrl.us', tag:'CTRL8'},
+  {id:9, name:'ctrl.us', tag:'CTRL9'}
+];
+const INNER = [
+  {id:111, name:'BIOS', form:'/3'},
+  {id:222, name:'VERBUND', form:'/6'},
+  {id:333, name:'RECALL', form:'/9'},
+  {id:444, name:'PEAK', form:'/3'},
+  {id:555, name:'ABWEHR', form:'/6'},
+  {id:666, name:'ENERGIE', form:'/9'},
+  {id:777, name:'CO2', form:'/3'},
+  {id:888, name:'ATOM', form:'/6'},
+  {id:999, name:'BENCH', form:'/9'}
+];
+
+const S = {
+  running: true, t: 0, freq: 1.0,
+  fetchCount: 0, reinCount: 0, rausCount: 0,
+  activeSlot: null,
+  pulses: [],       // clock rings emanating from CPU
+  fetchPackets: [], // djin transfers in flight
+  lastPulse: 0, W: 0, H: 0
+};
+
+const $ = id => document.getElementById(id);
+const cv = $('traces');
+const ctx = cv.getContext('2d');
+
+function fitCanvas(){
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const r = $('board-wrap').getBoundingClientRect();
+  cv.width = r.width * dpr;
+  cv.height = r.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  S.W = r.width;
+  S.H = r.height;
+}
+addEventListener('resize', fitCanvas);
+
+function buildLists(){
+  $('ram-list').innerHTML = OUTER.map(o =>
+    `<div class="mini" data-outer="${o.id}">
+       <span class="led"></span>
+       <span class="id">${o.id}</span>
+       <span class="nm">${o.name}</span>
+       <span class="frm">${o.tag}</span>
+     </div>`
+  ).join('');
+
+  $('pcie-list').innerHTML = INNER.map(i =>
+    `<div class="mini" data-inner="${i.id}">
+       <span class="led"></span>
+       <span class="id">${i.id}</span>
+       <span class="nm">${i.name}</span>
+       <span class="frm">${i.form}</span>
+     </div>`
+  ).join('');
+
+  document.querySelectorAll('[data-outer]').forEach(el =>
+    el.onclick = () => selectSlot('outer', +el.dataset.outer));
+  document.querySelectorAll('[data-inner]').forEach(el =>
+    el.onclick = () => selectSlot('inner', +el.dataset.inner));
+  document.querySelectorAll('[data-slot]').forEach(el =>
+    el.onclick = () => selectSlot(el.dataset.slot, null));
+}
+
+function selectSlot(kind, idx){
+  S.activeSlot = {kind, idx};
+  document.querySelectorAll('.mini.on').forEach(e => e.classList.remove('on'));
+  document.querySelectorAll('.slot.active').forEach(e => e.classList.remove('active'));
+  const insp = $('inspector');
+
+  if(kind === 'outer'){
+    const o = OUTER[idx];
+    document.querySelector(`[data-outer="${o.id}"]`)?.classList.add('on');
+    insp.innerHTML =
+      `<h4>SLOT · ${o.id} · ${o.name}</h4>
+       <div class="row"><span>Ebene</span><span>OUTER · RAM-A</span></div>
+       <div class="row"><span>Tag</span><span>${o.tag}</span></div>
+       <div class="row"><span>File</span><span>${o.name}.html</span></div>
+       <div class="row"><span>Adresse</span><span>0x${(o.id*16).toString(16).padStart(3,'0')}</span></div>
+       <div class="row"><span>Bus</span><span>RAM-A → DJIN</span></div>`;
+  } else if(kind === 'inner'){
+    const i = INNER[idx];
+    document.querySelector(`[data-inner="${i.id}"]`)?.classList.add('on');
+    insp.innerHTML =
+      `<h4>SLOT · ${i.id} · ${i.name}</h4>
+       <div class="row"><span>Ebene</span><span>INNER · PCIe-B</span></div>
+       <div class="row"><span>Form</span><span>${i.form}</span></div>
+       <div class="row"><span>File</span><span>${i.id}.html</span></div>
+       <div class="row"><span>Adresse</span><span>0x${i.id.toString(16).padStart(4,'0')}</span></div>
+       <div class="row"><span>Bus</span><span>DJIN → PCIe-B</span></div>`;
+  } else {
+    document.querySelector(`[data-slot="${kind}"]`)?.classList.add('active');
+    const info = {
+      cpu:   {title:'⊙ EVIG · CPU', rows:[['Takt','2π Hz'],['Rolle','Beobachter'],['Ring','dashed spin 20s'],['Mode','continuous']]},
+      djin:  {title:'DJIN · CHIPSET', rows:[['Funktion','2π rein raus'],['Fetch','alle 1.5s'],['Mode','RAM ⇄ PCIe'],['2π','6.283185']]},
+      gpu:   {title:'DRACHE · GPU', rows:[['Render','KAISER ⇄ DRACHE'],['Sync','2π pulse'],['Bus','PCIe-B'],['Status','idle']]},
+      bios:  {title:'111 · BIOS', rows:[['POST','OK'],['Form','/3 PYRAMIDE'],['Bus','RAM-A'],['File','111.html']]},
+      clock: {title:'2π · CLOCK', rows:[['Wert','6.283185307'],['Freq','1.00 Hz'],['Mode','continuous'],['Pulse','CPU → bus']]}
+    }[kind];
+    if(info){
+      insp.innerHTML = `<h4>${info.title}</h4>` +
+        info.rows.map(r => `<div class="row"><span>${r[0]}</span><span>${r[1]}</span></div>`).join('');
+    }
+  }
+}
+
+function pushLog(text, type){
+  const el = document.createElement('div');
+  el.className = 'line ' + (type || '');
+  const t = new Date().toLocaleTimeString().slice(0,8);
+  el.innerHTML = `<span class="t">[${t}]</span>${text}`;
+  const log = $('log');
+  log.insertBefore(el, log.firstChild);
+  while(log.children.length > 60) log.removeChild(log.lastChild);
+}
+
+function flashSlot(sel){
+  const el = document.querySelector(sel);
+  if(!el) return;
+  el.classList.add('pulse');
+  setTimeout(() => el.classList.remove('pulse'), 400);
+}
+
+function fetchPacket(){
+  const rein = Math.random() > 0.5;
+  const outerIdx = Math.floor(Math.random() * 9);
+  const innerIdx = Math.floor(Math.random() * 9);
+  const outer = OUTER[outerIdx];
+  const inner = INNER[innerIdx];
+
+  S.fetchCount++;
+  if(rein) S.reinCount++; else S.rausCount++;
+  $('s-fetch').textContent = S.fetchCount;
+  $('s-rein').textContent = S.reinCount;
+  $('s-raus').textContent = S.rausCount;
+
+  const djinEl = document.querySelector('[data-slot="djin"]');
+  if(djinEl){
+    djinEl.classList.add('active');
+    setTimeout(() => djinEl.classList.remove('active'), 300);
+  }
+
+  // flash both endpoints
+  flashSlot(`[data-${rein ? 'outer' : 'inner'}="${rein ? outer.id : inner.id}"]`);
+  flashSlot(`[data-${rein ? 'inner' : 'outer'}="${rein ? inner.id : outer.id}"]`);
+
+  const kind = rein ? 'rein' : 'raus';
+  const fromStr = rein ? `RAM·${outer.id}·${outer.name}` : `PCIe·${inner.id}·${inner.name}`;
+  const toStr   = rein ? `PCIe·${inner.id}·${inner.name}` : `RAM·${outer.id}·${outer.name}`;
+  pushLog(`${kind.toUpperCase()} · ${fromStr} → DJIN → ${toStr} · 2π=${(2*Math.PI).toFixed(4)}`, kind);
+
+  // spawn visual packet
+  S.fetchPackets.push({
+    fromKey: rein ? `outer-${outer.id}` : `inner-${inner.id}`,
+    toKey:   rein ? `inner-${inner.id}` : `outer-${outer.id}`,
+    t: 0, dur: 1.2,
+    color: rein ? '#39ff88' : '#ff6a5a',
+    label: rein ? 'REIN' : 'RAUS'
+  });
+}
+
+function anchorOf(key, wrapRect){
+  const [type, id] = key.split('-');
+  const sel = type === 'outer' ? `[data-outer="${id}"]` : `[data-inner="${id}"]`;
+  const el = document.querySelector(sel);
+  if(!el) return null;
+  const r = el.getBoundingClientRect();
+  return { x: r.left - wrapRect.left + r.width/2, y: r.top - wrapRect.top + r.height/2 };
+}
+
+function drawTraces(dt){
+  ctx.clearRect(0, 0, S.W, S.H);
+
+  const wrap = $('board-wrap').getBoundingClientRect();
+  const cpuEl = document.querySelector('[data-slot="cpu"]');
+  const djinEl = document.querySelector('[data-slot="djin"]');
+  const gpuEl = document.querySelector('[data-slot="gpu"]');
+  const ramEl = document.querySelector('.ram');
+  const pcieEl = document.querySelector('.pcie');
+  if(!cpuEl || !djinEl || !ramEl || !pcieEl) return;
+
+  const off = (el) => {
+    const r = el.getBoundingClientRect();
+    return { x: r.left - wrap.left + r.width/2, y: r.top - wrap.top + r.height/2 };
+  };
+  const P = {
+    cpu: off(cpuEl), djin: off(djinEl),
+    ram: off(ramEl), pcie: off(pcieEl),
+    gpu: gpuEl ? off(gpuEl) : null
+  };
+
+  // static traces
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(57,255,136,0.14)';
+
+  // RAM → DJIN
+  ctx.beginPath();
+  ctx.moveTo(P.ram.x + 30, P.djin.y);
+  ctx.lineTo(P.djin.x - 30, P.djin.y);
+  ctx.stroke();
+
+  // DJIN → PCIe
+  ctx.beginPath();
+  ctx.moveTo(P.djin.x + 30, P.djin.y);
+  ctx.lineTo(P.pcie.x - 30, P.djin.y);
+  ctx.stroke();
+
+  // CPU → DJIN
+  ctx.beginPath();
+  ctx.moveTo(P.cpu.x, P.cpu.y + 40);
+  ctx.lineTo(P.djin.x, P.djin.y - 26);
+  ctx.stroke();
+
+  // DJIN → GPU
+  if(P.gpu){
+    ctx.beginPath();
+    ctx.moveTo(P.djin.x, P.djin.y + 26);
+    ctx.lineTo(P.gpu.x, P.gpu.y - 26);
+    ctx.stroke();
+  }
+
+  // 2π pulse rings from CPU
+  for(let i = S.pulses.length - 1; i >= 0; i--){
+    const p = S.pulses[i];
+    p.r += 200 * dt;
+    p.alpha -= 0.85 * dt;
+    if(p.alpha <= 0){ S.pulses.splice(i, 1); continue; }
+    ctx.strokeStyle = `rgba(57,255,136,${p.alpha * 0.5})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(P.cpu.x, P.cpu.y, p.r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // fetch packets in flight (two-segment path via DJIN)
+  for(let i = S.fetchPackets.length - 1; i >= 0; i--){
+    const p = S.fetchPackets[i];
+    p.t += dt;
+    const u = Math.min(1, p.t / p.dur);
+    const from = anchorOf(p.fromKey, wrap);
+    const to   = anchorOf(p.toKey, wrap);
+    if(!from || !to){ S.fetchPackets.splice(i, 1); continue; }
+
+    let px, py;
+    if(u < 0.5){
+      const v = u * 2;
+      px = from.x + (P.djin.x - from.x) * v;
+      py = from.y + (P.djin.y - from.y) * v;
+    } else {
+      const v = (u - 0.5) * 2;
+      px = P.djin.x + (to.x - P.djin.x) * v;
+      py = P.djin.y + (to.y - P.djin.y) * v;
+    }
+
+    ctx.save();
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = p.color;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(px, py, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = p.color;
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText(p.label, px + 8, py - 6);
+
+    if(u >= 1) S.fetchPackets.splice(i, 1);
+  }
+}
+
+// init
+fitCanvas();
+buildLists();
+pushLog('MAIN · MAINBOARD REV 2.0 · boot ok', 'boot');
+pushLog('CPU ⊙ EVIG · DJIN 2π · GPU DRACHE', 'boot');
+pushLog('RAM-A 1-9 · PCIe-B 111-999 · 18 slots', 'boot');
+pushLog('CLOCK 1.00 Hz · 2π = 6.283185307', 'boot');
+
+$('btn-run').onclick = () => {
+  S.running = !S.running;
+  $('btn-run').textContent = S.running ? 'RUN' : 'PAUSE';
+  $('btn-run').classList.toggle('on', S.running);
+};
+$('btn-reset').onclick = () => {
+  S.t = 0; S.fetchCount = 0; S.reinCount = 0; S.rausCount = 0;
+  $('s-fetch').textContent = 0;
+  $('s-rein').textContent = 0;
+  $('s-raus').textContent = 0;
+  S.pulses.length = 0;
+  S.fetchPackets.length = 0;
+  pushLog('SYSTEM RESET · t=0 · 2π neu', 'boot');
+};
+
+let lastT = performance.now();
+let fetchTimer = 0;
+
+function loop(now){
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+
+  if(S.running){
+    S.t += dt * S.freq;
+    const omega = 2 * Math.PI * S.t;
+    const sin = Math.sin(omega);
+
+    $('p-pi').textContent = (2 * Math.PI).toFixed(6);
+    $('p-t').textContent = S.t.toFixed(3);
+    $('p-sin').textContent = sin.toFixed(3);
+    $('p-num').textContent = Math.abs(sin).toFixed(4);
+    $('p-dir').textContent = sin > 0 ? 'REIN →' : 'RAUS ←';
+    $('p-dir').style.color = sin > 0 ? 'var(--green)' : 'var(--red)';
+
+    $('b-clock').textContent = `⏱ 2πt = ${(omega % (2 * Math.PI)).toFixed(3)}`;
+    $('cpu-clock').textContent = `2πt = ${(omega % (2 * Math.PI)).toFixed(3)}`;
+    $('cpu-sin').textContent = `sin(2πt) = ${sin.toFixed(3)}`;
+    $('clock-tag').textContent = `${S.freq.toFixed(2)} Hz`;
+
+    S.lastPulse += dt;
+    if(S.lastPulse > 0.6){
+      S.lastPulse = 0;
+      S.pulses.push({ r: 30, alpha: 0.85 });
+    }
+
+    fetchTimer += dt;
+    if(fetchTimer > 1.5){
+      fetchTimer = 0;
+      fetchPacket();
+    }
+  }
+
+  drawTraces(dt);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
