@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>iki1uc · PQ→PQ RESPO + 3TEL LINK · INLINE</title>
+<style>
+  :root{--bg:#08080a;--surface:#101015;--border:#2a2a3a;--gold:#f0d080;--text:#e8e6df;--muted:#8a8990;--green:#7cfc00;--red:#ff453a}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:ui-monospace,Menlo,Consolas,monospace;overflow:hidden}
+  body{display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+  nav{display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap;align-items:center}
+  nav b{color:var(--gold);margin-right:8px;font-size:13px}
+  button{font:inherit;font-size:12px;padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer}
+  button:hover{color:var(--text)}
+  button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  button[aria-selected="true"]{background:var(--gold);border-color:var(--gold);color:#000;font-weight:700}
+  main{flex:1;position:relative;min-height:0}
+  .view{position:absolute;inset:0;display:none;flex-direction:column}
+  .view.on{display:flex}
+  .cwrap{flex:1;position:relative;min-height:0}
+  .cwrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;padding:10px 14px;border-top:1px solid var(--border);background:var(--surface)}
+  .sl{display:flex;flex-direction:column;gap:3px;font-size:10px;letter-spacing:.1em;color:var(--muted)}
+  .sl b{color:var(--gold);font-size:11px}
+  .sl input{width:100%;accent-color:var(--gold)}
+  .readout{padding:8px 14px;font-size:11px;letter-spacing:.12em;color:var(--muted);border-top:1px solid var(--border);background:var(--surface);display:flex;gap:22px;flex-wrap:wrap;align-items:center}
+  .readout b{color:var(--gold);font-size:14px}
+</style>
+</head>
+<body>
+<nav role="tablist" aria-label="Dashboards">
+  <b>iki1uc</b>
+  <button role="tab" id="t1" aria-selected="true" data-v="v1">PQ→PQ RESPO · PC ULTRA</button>
+  <button role="tab" id="t2" aria-selected="false" data-v="v2">3TEL · LINK</button>
+</nav>
+<main>
+  <section class="view on" id="v1">
+    <div class="cwrap"><canvas id="cv1"></canvas></div>
+    <div class="ctl">
+      <label class="sl">DIST<b id="d1">380</b><input id="s1-dist" type="range" min="120" max="700" step="10" value="380"></label>
+      <label class="sl">FREQ<b id="f1">3.0</b><input id="s1-freq" type="range" min="0.5" max="10" step="0.1" value="3"></label>
+      <label class="sl">COMPAT<b id="c1">85%</b><input id="s1-compat" type="range" min="0" max="1" step="0.01" value="0.85"></label>
+    </div>
+    <div class="readout">
+      <span>RESPO <b id="r1-respo">0</b></span>
+      <span>STATE <b id="r1-state">—</b></span>
+      <span>DRAG PQ-B</span>
+    </div>
+  </section>
+  <section class="view" id="v2">
+    <div class="cwrap"><canvas id="cv2"></canvas></div>
+    <div class="ctl">
+      <label class="sl">q702<b id="va">702</b><input id="s2-a" type="range" min="0" max="1200" step="1" value="702"></label>
+      <label class="sl">u1030<b id="vb">1030</b><input id="s2-b" type="range" min="0" max="1200" step="1" value="1030"></label>
+      <label class="sl">PQ<b id="vc">536</b><input id="s2-c" type="range" min="0" max="1200" step="1" value="536"></label>
+    </div>
+    <div class="readout">
+      <span>3TEL <b id="r2-sum">2268</b></span>
+      <span>4TEL <b id="r2-four">567</b></span>
+      <span>LINK <b id="r2-state">—</b></span>
+    </div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+
+function ensureCanvasSize(cv, ctx){
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const r = cv.getBoundingClientRect();
+  const W = Math.max(1, r.width), H = Math.max(1, r.height);
+  const nw = Math.floor(W * dpr), nh = Math.floor(H * dpr);
+  if (cv.width !== nw || cv.height !== nh) {
+    cv.width = nw; cv.height = nh;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  return { W, H };
+}
+
+/* ===== TABS ===== */
+const tabs = document.querySelectorAll('[role=tab]');
+let current = 'v1';
+function show(id){
+  tabs.forEach(t => t.setAttribute('aria-selected', t.dataset.v === id ? 'true' : 'false'));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === id));
+  current = id;
+  try { history.replaceState(null, '', '#' + id); } catch(e){}
+}
+tabs.forEach(t => t.onclick = () => show(t.dataset.v));
+if (location.hash === '#v2') show('v2');
+
+/* ===== V1: PQ→PQ RESPO ===== */
+const V1 = {
+  ready:false, cv:null, ctx:null,
+  t:0, dist:380, freq:3, compat:0.85,
+  dragging:false,
+  init(){
+    if (this.ready) return;
+    this.cv = $('cv1'); this.ctx = this.cv.getContext('2d');
+    this.ready = true;
+
+    this.cv.addEventListener('pointerdown', e => {
+      const r = this.cv.getBoundingClientRect();
+      const { W, H } = ensureCanvasSize(this.cv, this.ctx);
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      const bx = W/2 + this.dist/2, by = H/2;
+      if (Math.hypot(mx - bx, my - by) < 90) {
+        this.dragging = true;
+        this.cv.setPointerCapture(e.pointerId);
+      }
+    });
+    this.cv.addEventListener('pointermove', e => {
+      if (!this.dragging) return;
+      const r = this.cv.getBoundingClientRect();
+      const { W, H } = ensureCanvasSize(this.cv, this.ctx);
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      const dx = mx - W/2, dy = my - H/2;
+      this.dist = Math.max(120, Math.min(700, Math.hypot(dx, dy) * 2));
+      $('s1-dist').value = Math.round(this.dist);
+      $('d1').textContent = Math.round(this.dist);
+    });
+    const end = () => { this.dragging = false; };
+    this.cv.addEventListener('pointerup', end);
+    this.cv.addEventListener('pointercancel', end);
+
+    $('s1-dist').oninput = e => { this.dist = +e.target.value; $('d1').textContent = Math.round(this.dist); };
+    $('s1-freq').oninput = e => { this.freq = +e.target.value; $('f1').textContent = this.freq.toFixed(1); };
+    $('s1-compat').oninput = e => { this.compat = +e.target.value; $('c1').textContent = (this.compat*100).toFixed(0) + '%'; };
+  },
+  respo(){
+    return this.compat * Math.exp(-this.dist / 400) * (0.85 + 0.15 * Math.sin(this.t * this.freq));
+  },
+  raf(ts){
+    const dt = Math.min(0.05, (ts - (this.last || ts)) / 1000);
+    this.last = ts;
+    this.t += dt;
+    this.draw();
+    const r = this.respo();
+    $('r1-respo').textContent = (r * 1000).toFixed(1);
+    const st = r > 0.5 ? 'ENTANGLED' : r > 0.2 ? 'COHERENT' : 'DECOHERENT';
+    $('r1-state').textContent = st;
+    $('r1-state').style.color = r > 0.5 ? 'var(--green)' : r > 0.2 ? 'var(--gold)' : 'var(--red)';
+  },
+  draw(){
+    const { W, H } = ensureCanvasSize(this.cv, this.ctx);
+    const c = this.ctx, t = this.t;
+    const cx = W/2, cy = H/2;
+    const ax = cx - this.dist/2, ay = cy;
+    const bx = cx + this.dist/2, by = cy;
+    const respo = this.respo();
+
+    c.fillStyle = '#08080a';
+    c.fillRect(0, 0, W, H);
+    c.strokeStyle = 'rgba(240,208,128,0.04)';
+    c.lineWidth = 1;
+    for (let x = 0; x < W; x += 40){ c.beginPath(); c.moveTo(x,0); c.lineTo(x,H); c.stroke(); }
+    for (let y = 0; y < H; y += 40){ c.beginPath(); c.moveTo(0,y); c.lineTo(W,y); c.stroke(); }
+
+    // resonance wave
+    const amp = respo * 60;
+    if (amp > 0.5) {
+      c.strokeStyle = `rgba(240,208,128,${0.2 + respo*0.8})`;
+      c.lineWidth = 1 + respo * 3;
+      c.beginPath();
+      const segs = 60;
+      for (let i = 0; i <= segs; i++) {
+        const u = i / segs;
+        const px = ax + (bx - ax) * u;
+        const py = ay + Math.sin(u * Math.PI * 6 + t * this.freq * 2) * amp * Math.sin(u * Math.PI);
+        if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+      }
+      c.stroke();
+    }
+
+    this.drawPQ(ax, ay, 'PQ-A', '#f0d080', t, 0);
+    this.drawPQ(bx, by, 'PQ-B', '#7cfc00', t, 1.3);
+
+    c.fillStyle = 'rgba(240,208,128,0.9)';
+    c.font = 'bold 11px monospace';
+    c.textAlign = 'left';
+    c.textBaseline = 'alphabetic';
+    c.fillText(`RESPO ${(respo*1000).toFixed(1)}`, 14, 22);
+    c.fillStyle = respo > 0.5 ? '#7cfc00' : respo > 0.2 ? '#f0d080' : '#ff453a';
+    c.font = 'bold 10px monospace';
+    c.fillText(respo > 0.5 ? 'ENTANGLED' : respo > 0.2 ? 'COHERENT' : 'DECOHERENT', 14, 38);
+    c.fillStyle = 'rgba(232,230,223,0.5)';
+    c.font = '9px monospace';
+    c.fillText(`dist ${this.dist.toFixed(0)} · freq ${this.freq.toFixed(1)} · compat ${(this.compat*100).toFixed(0)}%`, 14, 54);
+  },
+  drawPQ(x, y, name, color, t, phase){
+    const c = this.ctx;
+    const pulse = 1 + Math.sin(t * 2 + phase) * 0.08;
+    const R = 36 * pulse;
+
+    const g = c.createRadialGradient(x, y, 0, x, y, R * 4);
+    g.addColorStop(0, color + 'cc');
+    g.addColorStop(0.4, color + '22');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g;
+    c.beginPath(); c.arc(x, y, R * 4, 0, Math.PI * 2); c.fill();
+
+    const letters = ['F', 'O', 'Q'];
+    for (let i = 0; i < 3; i++) {
+      const a = t * (0.8 + i * 0.3) + phase + i * 2.09;
+      const r = R + 22 + i * 8;
+      const ex = x + Math.cos(a) * r;
+      const ey = y + Math.sin(a) * r;
+      c.strokeStyle = color + '22';
+      c.lineWidth = 1;
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.stroke();
+      c.fillStyle = color;
+      c.shadowColor = color;
+      c.shadowBlur = 8;
+      c.beginPath(); c.arc(ex, ey, 5, 0, Math.PI * 2); c.fill();
+      c.shadowBlur = 0;
+      c.fillStyle = '#08080a';
+      c.font = 'bold 7px monospace';
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillText(letters[i], ex, ey);
+    }
+
+    c.fillStyle = '#08080a';
+    c.strokeStyle = color;
+    c.lineWidth = 2.5;
+    c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fill(); c.stroke();
+
+    c.fillStyle = color;
+    c.font = 'bold 11px monospace';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(name, x, y - 2);
+    c.fillStyle = color + '99';
+    c.font = '7px monospace';
+    c.fillText('2t', x, y + 12);
+  }
+};
+
+/* ===== V2: 3TEL LINK ===== */
+const V2 = {
+  ready:false, cv:null, ctx:null,
+  t:0, a:702, b:1030, c:536, target:2268,
+  init(){
+    if (this.ready) return;
+    this.cv = $('cv2'); this.ctx = this.cv.getContext('2d');
+    this.ready = true;
+    $('s2-a').oninput = e => { this.a = +e.target.value; $('va').textContent = this.a; };
+    $('s2-b').oninput = e => { this.b = +e.target.value; $('vb').textContent = this.b; };
+    $('s2-c').oninput = e => { this.c = +e.target.value; $('vc').textContent = this.c; };
+  },
+  sum(){ return this.a + this.b + this.c; },
+  raf(ts){
+    const dt = Math.min(0.05, (ts - (this.last || ts)) / 1000);
+    this.last = ts;
+    this.t += dt;
+    this.draw();
+    const sum = this.sum();
+    const locked = Math.abs(sum - this.target) < 20;
+    $('r2-sum').textContent = sum;
+    $('r2-four').textContent = (sum / 4).toFixed(0);
+    $('r2-state').textContent = locked ? '◆ LINKED' : (sum > this.target ? 'OVER' : 'BELOW');
+    $('r2-state').style.color = locked ? 'var(--green)' : sum > this.target ? 'var(--red)' : 'var(--gold)';
+  },
+  draw(){
+    const { W, H } = ensureCanvasSize(this.cv, this.ctx);
+    const c = this.ctx, t = this.t;
+    c.fillStyle = '#08080a';
+    c.fillRect(0, 0, W, H);
+    c.strokeStyle = 'rgba(240,208,128,0.04)';
+    for (let x = 0; x < W; x += 40){ c.beginPath(); c.moveTo(x,0); c.lineTo(x,H); c.stroke(); }
+    for (let y = 0; y < H; y += 40){ c.beginPath(); c.moveTo(0,y); c.lineTo(W,y); c.stroke(); }
+
+    const sum = this.sum();
+    const locked = Math.abs(sum - this.target) < 20;
+
+    // bars on left
+    const barW = Math.min(56, W * 0.08);
+    const gap = 24;
+    const barX0 = 32;
+    const barY0 = 70;
+    const barH = H - 190;
+    const maxV = 1200;
+    const vals = [this.a, this.b, this.c];
+    const names = ['q702', 'u1030', 'PQ'];
+    const colors = ['#ff7a00', '#00ccff', '#ffd700'];
+
+    for (let i = 0; i < 3; i++) {
+      const x = barX0 + i * (barW + gap);
+      const f = vals[i] / maxV;
+      const bh = Math.max(2, barH * f);
+      c.fillStyle = '#101015';
+      c.fillRect(x, barY0, barW, barH);
+      c.fillStyle = colors[i];
+      c.shadowColor = colors[i];
+      c.shadowBlur = locked ? 20 : 8;
+      c.fillRect(x, barY0 + barH - bh, barW, bh);
+      c.shadowBlur = 0;
+      c.fillStyle = colors[i];
+      c.font = 'bold 10px monospace';
+      c.textAlign = 'center';
+      c.textBaseline = 'alphabetic';
+      c.fillText(names[i], x + barW/2, barY0 - 10);
+      c.fillStyle = '#e8e6df';
+      c.font = 'bold 13px monospace';
+      c.fillText(vals[i], x + barW/2, barY0 + barH + 22);
+    }
+
+    // triangle on right
+    const triCX = W * 0.70;
+    const triCY = H * 0.46;
+    const triR = Math.min(W * 0.14, H * 0.28);
+    const triPts = [
+      { x: triCX,               y: triCY - triR,       name: 'q702',  v: this.a, color: colors[0] },
+      { x: triCX - triR * 0.87, y: triCY + triR * 0.5, name: 'u1030', v: this.b, color: colors[1] },
+      { x: triCX + triR * 0.87, y: triCY + triR * 0.5, name: 'PQ',    v: this.c, color: colors[2] }
+    ];
+
+    for (let i = 0; i < 3; i++) {
+      for (let j = i + 1; j < 3; j++) {
+        const p1 = triPts[i], p2 = triPts[j];
+        const link = Math.min(p1.v, p2.v) / Math.max(p1.v, p2.v, 1);
+        c.strokeStyle = `rgba(240,208,128,${0.12 + link * 0.5})`;
+        c.lineWidth = 1 + link * 3;
+        c.beginPath();
+        c.moveTo(p1.x, p1.y);
+        c.lineTo(p2.x, p2.y);
+        c.stroke();
+      }
+    }
+    for (const p of triPts) {
+      const pulse = 1 + Math.sin(t * 2 + p.v * 0.01) * 0.08;
+      c.fillStyle = '#08080a';
+      c.strokeStyle = p.color;
+      c.lineWidth = 2.5;
+      c.shadowColor = p.color;
+      c.shadowBlur = locked ? 22 : 10;
+      c.beginPath(); c.arc(p.x, p.y, 14 * pulse, 0, Math.PI * 2); c.fill(); c.stroke();
+      c.shadowBlur = 0;
+      c.fillStyle = p.color;
+      c.font = 'bold 9px monospace';
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillText(p.name, p.x, p.y);
+    }
+
+    // sum
+    c.fillStyle = locked ? '#7cfc00' : '#f0d080';
+    c.font = 'bold 30px monospace';
+    c.textAlign = 'center';
+    c.textBaseline = 'alphabetic';
+    c.shadowColor = locked ? '#7cfc00' : '#f0d080';
+    c.shadowBlur = locked ? 26 : 12;
+    c.fillText(sum, triCX, triCY + triR + 78);
+    c.shadowBlur = 0;
+    c.fillStyle = 'rgba(232,230,223,0.5)';
+    c.font = '10px monospace';
+    c.fillText(`3TEL ${sum} / ${this.target} · 4TEL ${(sum / 4).toFixed(0)}`, triCX, triCY + triR + 96);
+    if (locked) {
+      c.fillStyle = '#7cfc00';
+      c.font = 'bold 10px monospace';
+      c.fillText('◆ LINKED', triCX, triCY + triR + 116);
+    }
+  }
+};
+
+/* ===== INIT BOTH ===== */
+V1.init();
+V2.init();
+
+/* ===== SINGLE RAF ===== */
+function loop(ts){
+  if (current === 'v1' && V1.ready) V1.raf(ts);
+  if (current === 'v2' && V2.ready) V2.raf(ts);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
